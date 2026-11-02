@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.client.json",
+  "compilerOptions": {
+    "emitDeclarationOnly": false,
+    "outDir": ".client-test-build",
+    "rootDir": "."
+  },
+  "include": ["src/client/**/*.ts", "src/client/**/*.tsx", "src/plan-contract.ts", "test/plan-client.test.tsx"],
+  "exclude": []
+}

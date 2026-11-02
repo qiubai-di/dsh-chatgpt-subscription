@@ -1,0 +1,17 @@
+node_modules
+.test-build/
+.client-test-build/
+artifacts/
+.DS_Store
+*.log
+.env
+.env.*
+.npmrc
+.pnpmfile.cjs
+.dsh/
+.credentials.yaml
+.credentials.yml
+.credentials.json
+auth.json
+installation.json
+.chatgpt-backups/

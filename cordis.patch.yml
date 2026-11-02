@@ -1,0 +1,3 @@
+- insert:
+    - id: chatgpt-subscription
+      name: dsh-chatgpt-subscription

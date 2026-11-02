@@ -1,0 +1,1 @@
+{"version":3,"file":"siwc-error.js","sourceRoot":"","sources":["../src/siwc-error.ts"],"names":[],"mappings":"AAAA,qFAAqF;AACrF,MAAM,OAAO,SAAU,SAAQ,KAAK;IACzB,IAAI,CAAS;IAEtB,YAAY,IAAY,EAAE,OAAe;QACvC,KAAK,CAAC,OAAO,CAAC,CAAC;QACf,IAAI,CAAC,IAAI,GAAG,WAAW,CAAC;QACxB,IAAI,CAAC,IAAI,GAAG,IAAI,CAAC;IACnB,CAAC;CACF"}

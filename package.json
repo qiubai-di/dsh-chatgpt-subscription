@@ -1,0 +1,130 @@
+{
+  "name": "dsh-chatgpt-subscription",
+  "version": "0.1.8",
+  "private": true,
+  "type": "module",
+  "description": "OAuth-only ChatGPT subscription main-model integration for DeepSeek Harness",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qiubai-di/dsh-chatgpt-subscription.git"
+  },
+  "homepage": "https://github.com/qiubai-di/dsh-chatgpt-subscription#readme",
+  "bugs": {
+    "url": "https://github.com/qiubai-di/dsh-chatgpt-subscription/issues"
+  },
+  "keywords": ["dsh-plugin", "deepseek-harness", "chatgpt", "oauth"],
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "default": "./dist/client.js"
+    }
+  },
+  "bin": {
+    "dsh-chatgpt": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "CHANGELOG.md",
+    "docs",
+    "test/fixtures/bc-namespace-contract.json",
+    "scripts/verify-bc-namespace.mjs",
+    "scripts/smoke-package.mjs",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-model-selection",
+        "@deepseek-ai/dsh-client-connection"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.client.json && node scripts/build-client.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.client-test.json --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --test .test-build/test/*.test.js && tsc -p tsconfig.client-test.json && node --test .client-test-build/test/plan-client.test.js",
+    "check": "npm run typecheck && npm test && npm run build",
+    "install:local": "npm run build && node scripts/install.mjs",
+    "integrate:web": "node scripts/integrate-web.mjs",
+    "pack:local": "npm run build && npm pack --pack-destination artifacts"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/dsh-agent": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-atomic-write": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-attachment": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-authorization": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-credentials": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-credentials-local": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-fs": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-home-paths": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-launch-environment": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-llm": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-llm-pi-ai": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-sandbox": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-scope": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-session": "0.2.1-rc.2",
+    "@deepseek-ai/schemastery": "3.18.5",
+    "@earendil-works/pi-ai": "1.3.0",
+    "jose": "6.2.13",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-app-boot": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-connection": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-store": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-model-selection": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-session": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.1-rc.2",
+    "@types/node": "26.6.5",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "esbuild": "0.28.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "typescript": "7.0.2"
+  },
+  "bundleDependencies": [
+    "@deepseek-ai/cordis",
+    "@deepseek-ai/dsh-agent",
+    "@deepseek-ai/dsh-system-prompt",
+    "@deepseek-ai/dsh-tools",
+    "@deepseek-ai/dsh-atomic-write",
+    "@deepseek-ai/dsh-attachment",
+    "@deepseek-ai/dsh-authorization",
+    "@deepseek-ai/dsh-credentials",
+    "@deepseek-ai/dsh-credentials-local",
+    "@deepseek-ai/dsh-fs",
+    "@deepseek-ai/dsh-home-paths",
+    "@deepseek-ai/dsh-launch-environment",
+    "@deepseek-ai/dsh-llm",
+    "@deepseek-ai/dsh-llm-pi-ai",
+    "@deepseek-ai/dsh-sandbox",
+    "@deepseek-ai/dsh-scope",
+    "@deepseek-ai/dsh-session",
+    "@deepseek-ai/schemastery",
+    "@earendil-works/pi-ai",
+    "jose",
+    "yaml"
+  ]
+}

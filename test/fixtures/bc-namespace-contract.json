@@ -1,0 +1,45 @@
+{
+  "description": "Legal SIWC namespace fixture; offline shape contract, not server acceptance evidence",
+  "tools": [
+    {
+      "type": "namespace",
+      "name": "dsh",
+      "description": "Tools supplied by DeepSeek Harness",
+      "tools": [
+        {
+          "type": "function",
+          "name": "run_code",
+          "description": "Execute a TypeScript program against available tools",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "description"
+            ],
+            "additionalProperties": false
+          }
+        }
+      ]
+    }
+  ],
+  "qualifiedIdentities": [
+    {
+      "namespace": "dsh",
+      "name": "run_code",
+      "type": "function"
+    }
+  ],
+  "bcObservedToolNames": [
+    "dsh"
+  ],
+  "bcCompressReachable": false,
+  "bcCompressSurfaceOn": false
+}
