@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path';
 import { parseDocument } from 'yaml';
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write';
-export const HOST_VERSION = '0.2.1-rc.2';
+export const HOST_VERSION = '0.2.2-rc.1';
 export const PROFILE = 'chatgpt';
 export const ROUTE = 'openai-chatgpt';
 export const INSTALL_MARKER = 'dsh-chatgpt-subscription';
@@ -60,11 +60,23 @@ export async function atomicWrite(path, value, mode = 0o600) {
         await rm(temporary, { force: true });
     }
 }
+/** Translate only this lease's acquisition timeout; never expose provider errors. */
+async function withOperationLock(path, operation) {
+    try {
+        return await withFileLock(path, operation);
+    }
+    catch (error) {
+        if (error instanceof Error && error.message === `atomic-write: timed out waiting for the writer lock at ${path}.lock`) {
+            throw new LocalSetupError('OPERATION_LOCK_TIMEOUT', '等待订阅目录的 .operation-lock.lock 超时。请先关闭使用此授权的 DSH 和登录进程；若仍失败，请检查残留锁，确认无占用后再移走该文件。授权数据无需删除。');
+        }
+        throw error;
+    }
+}
 /** Keep account-changing operations out of an active DSH run, including across CLIs. */
 export async function acquireOperationLease(home, operation) {
     const path = join(home, '.operation-lock');
     const nonce = randomUUID();
-    return withFileLock(path, async () => {
+    return withOperationLock(path, async () => {
         for (let attempt = 0; attempt < 2; attempt++) {
             try {
                 const handle = await open(path, 'wx', 0o600);
@@ -81,7 +93,7 @@ export async function acquireOperationLease(home, operation) {
                 let released = false;
                 return {
                     async release() {
-                        await withFileLock(path, async () => {
+                        await withOperationLock(path, async () => {
                             if (released)
                                 return;
                             const held = JSON.parse(await readFile(path, 'utf8'));
@@ -94,7 +106,7 @@ export async function acquireOperationLease(home, operation) {
                     async trackChild(pid) {
                         if (!Number.isSafeInteger(pid) || pid <= 0)
                             throw new LocalSetupError('INVALID_CHILD', 'DSH 子进程标识无效。');
-                        await withFileLock(path, async () => {
+                        await withOperationLock(path, async () => {
                             const held = JSON.parse(await readFile(path, 'utf8'));
                             if (released || held.nonce !== nonce)
                                 throw new LocalSetupError('LOCK_CHANGED', '运行锁已改变，未更新其他进程的锁。');
@@ -161,7 +173,7 @@ export async function readInstallation(home) {
     if (!value || typeof value !== 'object')
         throw new LocalSetupError('INVALID_INSTALLATION', '安装记录格式无效。');
     const record = value;
-    if (record.marker !== INSTALL_MARKER || record.dshVersion !== HOST_VERSION
+    if (record.marker !== INSTALL_MARKER || typeof record.dshVersion !== 'string'
         || typeof record.dshExecutable !== 'string' || !isAbsolute(record.dshExecutable)
         || typeof record.dshRealPath !== 'string' || typeof record.version !== 'string') {
         throw new LocalSetupError('INVALID_INSTALLATION', '安装记录与此订阅配置不匹配。');

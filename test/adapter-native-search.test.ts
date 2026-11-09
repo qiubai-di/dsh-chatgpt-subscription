@@ -154,6 +154,26 @@ function events(output: Record<string, any>[] = searchOutput()): unknown[] {
 }
 
 // Existing provider seam: red must fail on missing wire behavior, not a new module import.
+test('both adapter entries filter host-owned DSH search schemas before sending the request', async t => {
+  const f = await adapterFixture(t)
+  const bodies: Record<string, any>[] = []
+  globalThis.fetch = async (_input, init) => {
+    bodies.push(JSON.parse(String(init?.body)))
+    return sse(events())
+  }
+  const options = { ...request(), tools: [localRead, { name: 'web_search', description: 'Host search', parameters: { type: 'object' } }] }
+  for (const entry of ['stream', 'prepareCall'] as const) {
+    const result = await runEntry(f.make(), entry, options)
+    assert.equal(result.assembled.finish.kind, 'stop')
+  }
+  assert.equal(bodies.length, 2)
+  for (const body of bodies) {
+    assert.ok(body.tools.some((tool: any) => tool.type === 'web_search'))
+    assert.deepEqual(body.tools.find((tool: any) => tool.type === 'namespace' && tool.name === 'dsh').tools.map((tool: any) => tool.name), ['read'])
+  }
+  assert.equal(options.tools.length, 2, 'the caller retains its host-owned schemas')
+})
+
 test('subscription main-model request declares native search outside the local tool namespace', async () => {
   const provider = subscriptionProvider(manager(), [MODEL], { identity: OFFLINE_IDENTITY })
   const model = provider.getModels()[0]!

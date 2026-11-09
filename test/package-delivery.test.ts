@@ -9,10 +9,10 @@ import { requestPolicyFacts } from '../src/request-policy.js'
 const root = new URL('../../', import.meta.url)
 const json = async (path: string) => JSON.parse(await readFile(new URL(path, root), 'utf8'))
 
-test('candidate metadata identifies 0.1.8 and its changed replay projection consistently', async () => {
+test('candidate metadata identifies 0.2.0 and its changed replay projection consistently', async () => {
   const manifest = await json('package.json')
   const lock = await json('package-lock.json')
-  assert.equal(manifest.version, '0.1.8')
+  assert.equal(manifest.version, '0.2.0')
   assert.equal(lock.version, manifest.version)
   assert.equal(lock.packages[''].version, manifest.version)
   const facts = requestPolicyFacts('gpt-6.1-sol', 'synthetic-release-generation', new AbortController().signal, 'compaction')
@@ -39,4 +39,15 @@ test('package allowlist delivers legal BC contract docs and JSON without bundlin
   assert.equal(fixture.tools[0].name, 'dsh')
   assert.equal(fixture.tools[0].tools[0].name, 'run_code')
   assert.equal(fixture.bcCompressReachable, false)
+})
+
+test('DSH shared packages are host peers, not bundled dependencies', async () => {
+  const manifest = await json('package.json')
+  assert.equal(manifest.engines.dsh, '0.2.2-rc.1')
+  for (const name of ['@deepseek-ai/cordis', '@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-tools',
+    '@deepseek-ai/dsh-system-prompt', '@deepseek-ai/dsh-attachment', '@deepseek-ai/dsh-credentials']) {
+    assert.ok(manifest.peerDependencies[name], name)
+    assert.equal(manifest.dependencies[name], undefined, name)
+    assert.equal(manifest.bundleDependencies.includes(name), false, name)
+  }
 })

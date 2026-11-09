@@ -3,8 +3,9 @@ import { spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
-import { openSubscriptionStore } from './dsh-store.js';
+import { installCliHostResolution } from './cli-host-resolution.js';
 import { acquireOperationLease, assertHost, assertPrivateHome, LocalSetupError, PROFILE, readInstallation, selectDefaultModel, subscriptionHome } from './runtime.js';
+const VERSION = '0.2.0';
 const HELP = `DSH · ChatGPT 订阅
 
 用法：dsh-chatgpt <命令> [--home <专用数据目录>]
@@ -36,7 +37,7 @@ export async function main(arguments_ = process.argv.slice(2)) {
             home: { type: 'string' }, help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'V' },
         } });
     if (parsed.values.version) {
-        console.log('0.1.8');
+        console.log(VERSION);
         return;
     }
     const command = parsed.positionals[0] ?? 'help';
@@ -50,13 +51,15 @@ export async function main(arguments_ = process.argv.slice(2)) {
     const home = subscriptionHome(parsed.values.home);
     const installation = await readInstallation(home);
     await assertPrivateHome(home);
+    installCliHostResolution(installation.dshRealPath);
+    const { openSubscriptionStore } = await import('./dsh-store.js');
     const { manager, dispose } = await openSubscriptionStore(home);
     const cancellation = abortOnSignals();
     let lease;
     try {
         if (command === 'status') {
             const status = await manager.status();
-            console.log(`DSH ChatGPT 订阅 ${installation.version}`);
+            console.log(`DSH ChatGPT 订阅 ${VERSION}`);
             console.log(status.signedIn ? '登录：已保存授权' : '登录：未登录或需要重新授权');
             if (status.email)
                 console.log(`账号：${status.email}`);

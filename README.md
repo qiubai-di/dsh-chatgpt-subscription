@@ -4,7 +4,7 @@ English | [简体中文](<README.zh.md>)
 
 Use your own ChatGPT subscription as a main-model provider in DeepSeek Harness (DSH). DSH keeps control of sessions, history and local tool execution. The plugin reuses DSH’s PiAiAdapter for message conversion and uses Sign in with ChatGPT (SIWC) OAuth for the Responses API. It does not start a second agent.
 
-Version **0.1.8** is the first public distribution of `qiubai-di/dsh-chatgpt-subscription`. The release keeps the existing model, OAuth and request behavior; CLI release-version metadata is synchronized to 0.1.8. This is an independent integration, not an OpenAI-certified or officially endorsed product.
+Version **0.2.0** supports **DSH 0.2.2-rc.1**. Shared DSH packages now come from the host, tool isolation follows the new prompt and batch-execution APIs, and login lock timeouts explain the recovery step. Existing authorization records remain readable. This is an independent integration, not an OpenAI-certified or officially endorsed product.
 
 ## What it does
 
@@ -19,15 +19,14 @@ Other hosted capabilities, including image generation, Files/File Search, Code I
 ## Requirements and compatibility
 
 - **Node.js 24 or newer**.
-- Dependencies are pinned to **DSH `0.2.1-rc.2`** and **pi-ai `1.3.0`**. The local installer and launcher require exactly DSH `0.2.1-rc.2`; they reject other host versions.
-- DSH `0.2.1-rc.4` has only offline stream/persistence compatibility evidence. That is not installation, live-service or complete runtime support. Recheck compatibility before changing the host.
+- The supported host is **DSH `0.2.2-rc.1`**, with Cordis `4.1.0` and Schemastery `3.19.0`. Shared host packages are peer dependencies and are not bundled. Independent protocol libraries remain pinned. Older DSH releases are not supported by 0.2.0.
 - The installer creates a POSIX shell launcher. Windows installation, command shims and permissions have not been verified.
 
 ## Build and install from source
 
-**Direct GitHub installation has not been accepted for 0.1.8.** No verified one-line GitHub install command is provided here. The repository is not a promise of npm-registry availability. The following commands refer to the source checkout, not an extracted runtime package.
+**Use the built release archive or the source installer.** No verified one-line GitHub install command is provided here. The repository is not a promise of npm-registry availability. The following commands refer to the source checkout, not an extracted runtime package.
 
-From the 0.1.8 source directory:
+From the 0.2.0 source directory:
 
 ```sh
 npm ci --ignore-scripts --no-audit --no-fund
@@ -42,7 +41,7 @@ Close DSH processes using this provider before installing or changing authorizat
 npm run install:local
 ```
 
-The [installer](<scripts/install.mjs>) builds and packs locked runtime dependencies, verifies archive copies with SHA-256 and creates a dedicated data directory and launcher. It does not replace the DSH executable, start DSH or sign in. Package installation uses `--ignore-scripts`. Existing destinations not managed by this plugin are refused.
+The [installer](<scripts/install.mjs>) builds and packs independent runtime libraries, then uses the native DSH plugin manager to resolve host peers, verifies archive copies with SHA-256 and creates a dedicated data directory and launcher. It does not replace the DSH executable, start DSH or sign in. Package installation uses `--ignore-scripts`. Existing destinations not managed by this plugin are refused.
 
 Make sure the reported launcher directory is on your `PATH`, then create your own authorization:
 
@@ -83,6 +82,10 @@ Alternatively, `dsh-chatgpt run` starts the dedicated `chatgpt` profile instead 
 
 The CLI accepts `--home` for a dedicated data directory. The source installer accepts `--home`, `--bin-dir` and `--dsh`; the Web integration script accepts `--home`, `--dsh-home` and `--dsh`. Consult their source before customizing locations. A failed model-directory refresh does not discard a saved grant. If revocation fails, tokens remain available for a retry. Stop the running provider before login, logout, reinstallation or reintegration.
 
+## Login lock timeout
+
+If login reports `.operation-lock.lock`, acquisition timed out before OAuth started. Stop DSH instances and login processes using the same authorization directory. An empty or incomplete lock requires inspection; move it aside only after confirming no writer owns it, then retry. Keep the authorization files. The plugin does not delete uncertain locks automatically.
+
 ## Accounts, privacy and subscription limits
 
 The OAuth implementation is generic. The distributed package contains no real account, subscription grant, access token or refresh token. Each user creates their own authorization data by signing in. The plugin does not import an existing Pi or Codex login cache.
@@ -95,7 +98,7 @@ Prompts, selected history and supplied content are sent to OpenAI. `store:false`
 
 ## Technical contracts and verification
 
-- [0.1.8 offline verification, replay and cache limits](<docs/candidate-delivery.md>)
+- [0.2.0 offline verification, replay and cache limits](<docs/candidate-delivery.md>)
 - [Tool namespace contract](<docs/namespace-contract.md>)
 - [Durable tool-identity replay contract](<docs/durable-tool-identity.md>)
 - [Legal namespace fixture for BC interoperability](<test/fixtures/bc-namespace-contract.json>)

@@ -3,6 +3,7 @@ import { NativeSearchCapture, nativeSearchScope, textMessageId } from './native-
 import { nativeReplay, prepareNativeHistory, toolIdentityReplay } from './native-search-replay.js';
 import { PROVIDER_ID } from './catalog.js';
 import { CapabilityError } from './provider.js';
+import { isolateSubscriptionSearch } from './search-tool-isolation.js';
 /**
  * Add native Responses output/citations without replacing Pi's tool, image or
  * reasoning converter. Both entry points wrap the same frozen Pi generation.
@@ -40,7 +41,7 @@ export class SubscriptionAdapter extends LlmAdapter {
         const capture = new NativeSearchCapture(options.purpose === 'compaction');
         let request;
         try {
-            request = prepareNativeHistory(options, capture.plans, capture.historyTools);
+            request = prepareNativeHistory(isolateSubscriptionSearch(options), capture.plans, capture.historyTools);
         }
         catch (error) {
             if (!(error instanceof CapabilityError))

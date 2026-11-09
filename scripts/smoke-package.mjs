@@ -1,9 +1,9 @@
-// Serial, offline acceptance through the packed public root and bundled SDK.
-// Usage: node scripts/smoke-package.mjs <candidate.tgz> [actual-dsh-root]
-// The optional host only supplies persistence classes; no host config or credentials are loaded.
+// Serial, offline acceptance through the packed public root and actual host SDK.
+// Usage: node scripts/smoke-package.mjs <candidate.tgz> <actual-dsh-root>
+// The host supplies peer packages only; no host config or credentials are loaded.
 // The temporary public SDK spy injects legal onPayload options; it never replaces dispatch.
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 import { createRequire } from 'node:module';
@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 
-assert.ok(process.argv[2], 'Pass the candidate .tgz path');
+assert.ok(process.argv[2] && process.argv[3], 'Pass the candidate .tgz and DSH installation paths');
 const archive = resolve(process.argv[2]);
 // macOS default temp paths may traverse /var -> /private/var: compare canonical roots.
 const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-subscription-package-smoke-')));
@@ -26,11 +26,9 @@ const USAGE = { input_tokens: 20, output_tokens: 7, total_tokens: 27,
 const expectedUsage = { inputTokens: 13, outputTokens: 7, totalTokens: 27, cacheReadTokens: 5, cacheWriteTokens: 2 };
 const clone = value => JSON.parse(JSON.stringify(value));
 let respond, activeInjection, target, descriptor, original, plugin, ctx, subscription, facts, manifest;
-let hostStream;
+let sdkVersions;
 const persistence = {
-  bundled: { status: 'not-run', cases: 0, rawChunks: 0 },
-  host: { requested: Boolean(process.argv[3]), status: 'not-run', cases: 0, rawChunks: 0,
-    reason: process.argv[3] ? 'Host module not yet loaded' : 'No actual DSH root supplied' },
+  host: { status: 'not-run', cases: 0, rawChunks: 0 },
 };
 let intercepted = 0, injectedHooks = 0, openedContexts = 0;
 const sse = events => new Response(events.map(event => 'data: ' + JSON.stringify(event) + '\n\n').join(''),
@@ -70,6 +68,30 @@ try {
   assert.equal(detailedListing.split('\n').some(line => line.startsWith('l') || line.startsWith('h')), false,
     'archive must not contain external dependency symlinks or hard links');
   assert.doesNotMatch(listing, new RegExp('(?:^|/)(?:billion-context|dsh-optchat)(?:/|$)', 'im'));
+  const hostRoot = await realpath(resolve(process.argv[3]));
+  const hostRequire = createRequire(join(hostRoot, 'package.json'));
+  // Exercise the standalone CLI before mounting any peers into the archive.
+  const cliHome = join(root, 'synthetic-cli-home');
+  await mkdir(cliHome, { mode: 0o700 });
+  const hostBin = hostRequire.resolve('@deepseek-ai/dsh/lib/bin.js');
+  await writeFile(join(cliHome, 'installation.json'), JSON.stringify({
+    marker: 'dsh-chatgpt-subscription', version: '0.1.8', dshVersion: '0.2.1-rc.2',
+    dshExecutable: hostBin, dshRealPath: hostBin,
+  }));
+  const noNetwork = join(root, 'no-network.mjs');
+  await writeFile(noNetwork, 'globalThis.fetch = async () => { throw new Error("CLI smoke prohibits network"); };\n');
+  const cliStatus = execFileSync(process.execPath, ['--import', noNetwork, join(packed, 'dist/cli.js'),
+    'status', '--home', cliHome], { encoding: 'utf8' });
+  assert.ok(cliStatus.includes('DSH ChatGPT 订阅 ' + manifest.version));
+  assert.ok(cliStatus.includes('可用模型：0'));
+  const peerRoots = new Map();
+  for (const name of [...Object.keys(manifest.peerDependencies), '@deepseek-ai/cosmokit']) {
+    assert.ok(!listing.includes(`package/node_modules/${name}/`), 'host peer was bundled: ' + name);
+    const peerRoot = await realpath(resolve(hostRequire.resolve(name + '/package.json'), '..'));
+    peerRoots.set(name, peerRoot);
+    await mkdir(join(packed, 'node_modules', '@deepseek-ai'), { recursive: true });
+    await symlink(peerRoot, join(packed, 'node_modules', name));
+  }
   for (const file of ['docs/namespace-contract.md', 'docs/durable-tool-identity.md', 'docs/candidate-delivery.md',
     'test/fixtures/bc-namespace-contract.json', 'scripts/verify-bc-namespace.mjs', 'CHANGELOG.md']) {
     assert.ok((await readFile(join(packed, file))).length > 0, 'missing packed contract: ' + file);
@@ -88,32 +110,34 @@ try {
   const load = async name => {
     const resolved = name === '@earendil-works/pi-ai' ? fileURLToPath(resolveImport(name)) : require.resolve(name);
     const actual = await realpath(resolved);
-    assert.ok(!relative(packed, actual).startsWith('..'), 'dependency escaped packed root: ' + name);
-    dependencyEntries[name] = relative(packed, actual);
+    const boundary = peerRoots.get(name) ?? packed;
+    assert.ok(!relative(boundary, actual).startsWith('..'), 'dependency escaped its declared owner: ' + name);
+    dependencyEntries[name] = { owner: peerRoots.has(name) ? 'host' : 'archive', entry: relative(boundary, actual) };
     return import(pathToFileURL(actual));
   };
-  const [{ Context }, { default: Credentials }, { default: Llm, AssistantStreamAccumulator, BlockAssembler, expandAssistantStream, assembleAssistantStream }, sdk, publicRoot] = await Promise.all([
+  const [{ Context }, { default: Credentials }, { default: Llm, AssistantStreamAccumulator, BlockAssembler, expandAssistantStream, assembleAssistantStream }, , publicRoot] = await Promise.all([
     load('@deepseek-ai/cordis'), load('@deepseek-ai/dsh-credentials-local'), load('@deepseek-ai/dsh-llm'),
     load('@earendil-works/pi-ai'), import(pathToFileURL(join(packed, 'public-entry-smoke.mjs'))),
     load('@deepseek-ai/cosmokit'),
   ]);
-  const bundledManifest = JSON.parse(await readFile(require.resolve('@deepseek-ai/dsh-llm/package.json')));
-  persistence.bundled.version = bundledManifest.version;
-  persistence.bundled.status = 'incomplete';
-  if (process.argv[3]) {
-    const hostRoot = await realpath(resolve(process.argv[3]));
-    const hostRequire = createRequire(join(hostRoot, 'package.json'));
-    const hostEntry = await realpath(hostRequire.resolve('@deepseek-ai/dsh-llm'));
-    assert.ok(!relative(hostRoot, hostEntry).startsWith('..'), 'host LLM module escaped the supplied DSH root');
-    const hostManifest = JSON.parse(await readFile(hostRequire.resolve('@deepseek-ai/dsh-llm/package.json')));
-    hostStream = await import(pathToFileURL(hostEntry));
-    for (const name of ['AssistantStreamAccumulator', 'expandAssistantStream', 'assembleAssistantStream'])
-      assert.equal(typeof hostStream[name], 'function', 'missing actual host persistence API: ' + name);
-    persistence.host = { requested: true, status: 'incomplete', root: hostRoot,
-      moduleEntry: relative(hostRoot, hostEntry), version: hostManifest.version, cases: 0, rawChunks: 0 };
-  }
+  const hostManifest = JSON.parse(await readFile(require.resolve('@deepseek-ai/dsh-llm/package.json')));
+  persistence.host = { status: 'incomplete', version: hostManifest.version, cases: 0, rawChunks: 0 };
+  // The adapter creates Models from its host SDK, while this plugin supplies
+  // a pinned provider implementation. Intercept the adapter's actual SDK.
+  const hostSdkDirectory = join(root, 'host-sdk');
+  await mkdir(hostSdkDirectory);
+  await symlink(join(hostRoot, 'node_modules'), join(hostSdkDirectory, 'node_modules'));
+  await writeFile(join(hostSdkDirectory, 'resolve.mjs'),
+    'export const entry = import.meta.resolve("@earendil-works/pi-ai");\n');
+  const { entry: hostSdkEntry } = await import(pathToFileURL(join(hostSdkDirectory, 'resolve.mjs')));
+  const hostSdk = await import(hostSdkEntry);
+  sdkVersions = {
+    provider: JSON.parse(await readFile(join(packed, 'node_modules/@earendil-works/pi-ai/package.json'))).version,
+    adapter: JSON.parse(await readFile(join(hostRoot, 'node_modules/@earendil-works/pi-ai/package.json'))).version,
+  };
+  assert.ok(!relative(hostRoot, await realpath(fileURLToPath(hostSdkEntry))).startsWith('..'));
   plugin = publicRoot;
-  const probe = sdk.createModels({ credentials: new sdk.InMemoryCredentialStore(), modelsStore: new sdk.InMemoryModelsStore(),
+  const probe = hostSdk.createModels({ credentials: new hostSdk.InMemoryCredentialStore(), modelsStore: new hostSdk.InMemoryModelsStore(),
     authContext: { env: async () => undefined, fileExists: async () => false } });
   target = Object.getPrototypeOf(probe);
   descriptor = Object.getOwnPropertyDescriptor(target, 'streamSimple');
@@ -176,26 +200,19 @@ try {
     const generate = { ...config, sessionId: 'packed-identity-stable-session', purpose: options.purpose,
       messages: clone(options.messages ?? messages), signal: options.signal, tools: options.tools };
     const assembled = new BlockAssembler(), persisted = new AssistantStreamAccumulator(), chunks = [];
-    const hostPersisted = hostStream ? new hostStream.AssistantStreamAccumulator() : undefined;
     try {
       const stream = entry === 'stream' ? ctx.llm.stream(generate) : (await ctx.llm.prepareCall(config)).stream(generate);
       for await (const chunk of stream) {
         const raw = { time: chunks.length, chunk };
-        // Both durable boundaries receive the original object, before assembly or JSON cleanup.
-        if (hostPersisted) { hostPersisted.push(raw); persistence.host.rawChunks++; }
-        persisted.push(raw); persistence.bundled.rawChunks++;
+        // The actual host receives the original object before assembly or JSON cleanup.
+        persisted.push(raw); persistence.host.rawChunks++;
         chunks.push(chunk); assembled.push(chunk);
         if (chunk.type === 'usage') options.abortOnUsage?.();
       }
     } finally { activeInjection = undefined; respond = undefined; }
     const raw = chunks.map((chunk, time) => ({ time, chunk }));
-    const expanded = roundtrip(persisted, { expandAssistantStream, assembleAssistantStream }, raw, assembled, name + ': bundled');
-    persistence.bundled.cases++;
-    if (hostPersisted) {
-      const hostExpanded = roundtrip(hostPersisted, hostStream, raw, assembled, name + ': actual host');
-      assert.deepEqual(hostExpanded, expanded, name + ': actual host and bundled expansions agree');
-      persistence.host.cases++;
-    }
+    roundtrip(persisted, { expandAssistantStream, assembleAssistantStream }, raw, assembled, name + ': actual host');
+    persistence.host.cases++;
     assert.equal(bodies.length - beforeHttp, options.http ?? 1, name + ': final mock HTTP count');
     assert.equal(chunks.filter(chunk => chunk.type === 'finish').length, 1, name + ': one terminal outcome');
     if (options.hook !== false) {
@@ -434,10 +451,9 @@ try {
     assert.equal(cases.filter(item => item.entry === entry).length, 41, entry + ': full acceptance coverage');
   Object.defineProperty(target, 'streamSimple', descriptor);
   assert.equal(target.streamSimple, original);
-  persistence.bundled.status = 'passed';
-  if (hostStream) persistence.host.status = 'passed';
-  console.log(JSON.stringify({ version: manifest.version, persistence, archiveSha256: createHash('sha256').update(await readFile(archive)).digest('hex'),
-    packedPublicEntry: 'passed', entries: ['stream', 'prepareCall'], bundledDependencyResolution: 'passed', dependencyEntries,
+  persistence.host.status = 'passed';
+  console.log(JSON.stringify({ version: manifest.version, sdkVersions, persistence, archiveSha256: createHash('sha256').update(await readFile(archive)).digest('hex'),
+    packedPublicEntry: 'passed', standaloneCli: 'passed', entries: ['stream', 'prepareCall'], hostPeerResolution: 'passed', dependencyEntries,
     archiveDependencyLinks: false,
     legalBcFixtureDelivered: true, bcBundled: false, publicSdkPrototypeRestored: true,
     fakeHttpRequests: bodies.length, publicSdkIntercepts: intercepted, callerHooks: injectedHooks, contextsApplied: openedContexts,

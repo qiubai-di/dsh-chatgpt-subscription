@@ -1,4 +1,4 @@
-const PROJECTION = 'pi-ai@1.3.0/openai-responses;subscription@0.1.8/native-replay-v2;tool-identity=v1;pi-replay-body-state=v1;' +
+const PROJECTION = 'pi-ai@1.3.0/openai-responses;subscription@0.2.0/native-replay-v2;tool-identity=v1;pi-replay-body-state=v1;' +
     'endpoint=api.openai.com/v1;store=false;stream=sse;system=developer;tools=dsh-namespace+web_search;' +
     'include=reasoning.encrypted_content+web_search_call.action.sources;cache=implicit-short;' +
     'omit=max-output,explicit-cache,temperature,top-p,previous-response';

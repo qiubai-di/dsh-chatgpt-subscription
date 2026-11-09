@@ -9,6 +9,7 @@ import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { parseDocument } from 'yaml';
+import { installCliHostResolution } from '../dist/cli-host-resolution.js';
 import { acquireOperationLease, assertHost, atomicWrite, findDsh, readInstallation, subscriptionHome } from '../dist/runtime.js';
 
 const { values } = parseArgs({ options: {
@@ -78,6 +79,7 @@ try {
     originalManifest.dsh.profile.bundles.filter(bundle => bundle !== 'dsh-chatgpt-subscription'));
   await atomicWrite(patchPath, document.toString());
   const installedEntry = join(profile, 'node_modules', 'dsh-chatgpt-subscription', 'dist', 'index.js');
+  installCliHostResolution(host.realPath);
   await import(pathToFileURL(installedEntry).href);
   assert.equal(digest(await readFile(host.realPath)), hostBefore, 'Original DSH executable changed.');
   await atomicWrite(join(backup, 'integration.json'), `${JSON.stringify({

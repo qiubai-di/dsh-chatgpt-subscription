@@ -2,6 +2,16 @@
 
 此文件记录可交付行为变化；版本遵循语义化版本。离线验收不代表安装、运行生效或真实服务验收。
 
+## [0.2.0] - 2026-11-09
+
+- Support DSH 0.2.2-rc.1, Cordis 4.1.0 and Node.js 24.9+. Shared DSH packages are host peers, not bundled copies of an older runtime.
+- Adapt search isolation to host-owned prompt schemas and the batch tool executor, preserving native search and denying DSH search execution on this route.
+- Supply the host's image-count defaults and preserve existing image-byte limits.
+- Report operation writer-lock timeouts with a recovery explanation instead of the generic `Error`; uncertain locks are left untouched.
+- Allow login/status to read existing installation records while retaining the actual-host check for startup. Display the executing CLI version.
+- Resolve standalone CLI peers from its recorded DSH host before opening credential storage.
+- Install through the native plugin manager and verify packed public entries against supplied host packages.
+
 ## [0.1.8] - 2026-11-02
 
 ### Fixed

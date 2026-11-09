@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import test, { type TestContext } from 'node:test';
 import { parse } from 'yaml';
 import {
-  acquireOperationLease, atomicWrite, LocalSetupError, PROFILE, ROUTE, selectDefaultModel,
+  acquireOperationLease, atomicWrite, LocalSetupError, PROFILE, ROUTE, selectDefaultModel, readInstallation,
 } from '../src/runtime.js';
 
 async function temporaryHome(t: TestContext): Promise<string> {
@@ -15,6 +15,31 @@ async function temporaryHome(t: TestContext): Promise<string> {
   t.after(() => rm(home, { recursive: true, force: true }));
   return home;
 }
+
+test('an empty writer lock explains the login failure without deleting uncertain state', async t => {
+  const home = await temporaryHome(t);
+  const path = join(home, '.operation-lock.lock');
+  await writeFile(path, '');
+  await assert.rejects(acquireOperationLease(home, 'login'), error => {
+    assert.ok(error instanceof LocalSetupError);
+    assert.equal(error.code, 'OPERATION_LOCK_TIMEOUT');
+    assert.match(error.message, /\.operation-lock\.lock/);
+    assert.match(error.message, /DSH/);
+    return true;
+  });
+  assert.equal(await readFile(path, 'utf8'), '');
+  await rm(path);
+  const lease = await acquireOperationLease(home, 'login');
+  await lease.release();
+});
+
+test('login can read an existing installation record after a host upgrade', async t => {
+  const home = await temporaryHome(t);
+  const record = { marker: 'dsh-chatgpt-subscription', version: '0.1.8',
+    dshVersion: '0.2.1-rc.2', dshExecutable: join(home, 'old-dsh.js'), dshRealPath: join(home, 'old-dsh.js') };
+  await writeFile(join(home, 'installation.json'), JSON.stringify(record));
+  assert.deepEqual(await readInstallation(home), record);
+});
 
 function setupError(code: string): (error: unknown) => boolean {
   return error => error instanceof LocalSetupError && error.code === code;

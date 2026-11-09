@@ -1,14 +1,14 @@
-# 0.1.8: offline verification, replay and cache limits
+# 0.2.0: offline verification, replay and cache limits
 
 [English README](<../README.md>) | [中文说明](<../README.zh.md>)
 
-This document describes the technical verification boundary of the public 0.1.8 distribution. The first public release updates documentation and synchronizes CLI release-version metadata, without changing model, OAuth or request behavior. It is not a deployment record or evidence that a particular account, running process or upstream service has been verified.
+This document describes the technical verification boundary of the 0.2.0 host-compatibility release. It preserves OAuth and replay contracts while adapting dependencies and tool isolation to DSH 0.2.2-rc.1. It is not a deployment record or evidence that a particular account, running process or upstream service has been verified.
 
 ## Version and verification scope
 
-The package requires Node.js 24 or newer and pins DSH dependencies to `0.2.1-rc.2` and pi-ai to `1.3.0`. The local installer and launcher explicitly require DSH `0.2.1-rc.2`. Offline checks against DSH `0.2.1-rc.4` exercise stream/persistence classes only; they do not establish installation, full-runtime or live-service support for that version.
+The package requires Node.js 24.9 or newer and DSH `0.2.2-rc.1`. Shared framework and service packages resolve from the host through peer dependencies; they are not included in the archive. Source development dependencies pin the matching versions.
 
-The [packed-entry smoke test](<../scripts/smoke-package.mjs>) defines 82 scenarios: 41 each through `ctx.llm.stream` and `ctx.llm.prepareCall(...).stream`. It extracts the archive, imports its public root, applies the real plugin with `ctx.plugin(plugin)` and resolves runtime dependencies from inside the extracted package. The archive check rejects dependency links and inclusion of BC or OptChat.
+The [packed-entry smoke test](<../scripts/smoke-package.mjs>) defines 82 scenarios: 41 each through `ctx.llm.stream` and `ctx.llm.prepareCall(...).stream`. It extracts the archive, imports its public root, applies the real plugin with `ctx.plugin(plugin)`, resolves independent libraries inside the extracted package and verifies shared peers against the supplied host. Before mounting host peers, it also runs standalone CLI status against a synthetic old installation record with network disabled. The archive check rejects dependency links and inclusion of BC or OptChat.
 
 Synthetic grants exist only in temporary test storage. Before module import and plugin application, a fail-closed fetch mock accepts only the expected Responses requests; unexpected URLs fail. The smoke report distinguishes mocked HTTP requests from real requests and records zero real-provider calls, zero real-network requests and no real credentials read. It does not log in, install a profile or start the DSH application. A passing report applies to the exact archive hash and host modules named in that report, not to another build.
 
@@ -22,7 +22,7 @@ These are separate boundaries:
 - **Historical replay:** successful Responses output, Pi metadata and visible-content integrity bindings retain native history where trustworthy. Tool identity is bound to call IDs with namespace and function/custom kind, including remote and custom historical calls. Ordinary JSON persistence and a new plugin instance must preserve that identity.
 - **Degraded replay:** after edits, cropping, damage or a model change, the current visible text, arguments, images and results are authoritative. Valid independent identity records can survive, but deleted text, hidden old arguments and unbound reasoning are not restored. Missing or ambiguous tool provenance fails before HTTP rather than guessing a namespace or kind. Plain text can still degrade safely.
 
-Terminal events omit absent replay state rather than emitting an own property with `undefined`. Failed, cancelled or incomplete responses do not retain stale successful replay. Raw chunks enter `AssistantStreamAccumulator` before any JSON cleanup; expansion and assembly must preserve blocks, usage, terminal outcome and replay state. Supplying an actual DSH root to the archive smoke runs the same raw chunks through both bundled and host persistence classes.
+Terminal events omit absent replay state rather than emitting an own property with `undefined`. Failed, cancelled or incomplete responses do not retain stale successful replay. Raw chunks enter `AssistantStreamAccumulator` before any JSON cleanup; expansion and assembly must preserve blocks, usage, terminal outcome and replay state. The archive smoke requires an actual DSH root and sends raw chunks through its persistence classes. It records both the pinned provider SDK version and the host adapter SDK version.
 
 The detailed [namespace contract](<namespace-contract.md>) and [durable tool-identity contract](<durable-tool-identity.md>) remain the authoritative product contracts for declarations and historical provenance.
 
@@ -38,10 +38,10 @@ Both call paths bind the prepared request to the account identity and check the 
 
 ## Cache, capacity and consumer limits
 
-The 0.1.8 projection identifier contains:
+The 0.2.0 projection identifier contains:
 
 ```text
-subscription@0.1.8/native-replay-v2;tool-identity=v1;pi-replay-body-state=v1
+subscription@0.2.0/native-replay-v2;tool-identity=v1;pi-replay-body-state=v1
 ```
 
 `native-replay-v2` names the projection/replay algorithm revision, not a new envelope schema. Private identity/body-state bindings and public producer facts remain v1. The prompt-cache-key algorithm is unchanged, but consumers may revalidate when versioned facts change. Neither stable input prefixes nor a stable same-session key promises cache continuity across releases, server cache hits or subscription savings.
@@ -54,7 +54,7 @@ Real model behavior, account/workspace search rights, service-side selector acce
 
 ## Reproduce the offline checks
 
-From the source directory, with Node.js 24 or newer:
+From the source directory, with Node.js 24.9 or newer:
 
 ```sh
 npm ci --ignore-scripts --no-audit --no-fund
@@ -69,13 +69,7 @@ For optional host-backed image and stream checks, set `HOST` to an already insta
 DSH_IMAGE_TEST_HOST="${HOST:?}" DSH_STREAM_TEST_HOST="${HOST:?}" npm run check
 ```
 
-Given an already built 0.1.8 archive, set `ARCHIVE` to its file path and verify the packed public entry:
-
-```sh
-node scripts/smoke-package.mjs "${ARCHIVE:?}"
-```
-
-To also verify persistence against a supplied host:
+Given an already built 0.2.0 archive, set `ARCHIVE` to its file path and verify the packed public entry:
 
 ```sh
 node scripts/smoke-package.mjs "${ARCHIVE:?}" "${HOST:?}"
@@ -85,6 +79,6 @@ The smoke test extracts and executes packaged code. Use an audited archive; this
 
 ## Public artifact checks
 
-Before distribution, verify the final archive itself, not only the source checkout. Check the version, file allowlist, required contracts and fixture, complete runtime dependency closure, lack of external links and absence of real accounts or credentials. Packing from linked dependencies can omit hoisted transitive packages; do not treat a source-check pass as proof of a self-contained archive.
+Before distribution, verify the final archive itself, not only the source checkout. Check the version, file allowlist, required contracts and fixture, independent runtime dependencies and host-peer resolution, lack of external links and absence of real accounts or credentials. Packing from linked dependencies can omit hoisted transitive packages; do not treat a source-check pass as proof of an installable archive.
 
 Bind any published verification result to the archive SHA-256, command, Node.js version, scenario counts and any supplied host version. Remove account details and machine-specific paths from public reports. Rebuild and repeat archive checks after artifact changes. Installation, process loading, browser behavior and real-service acceptance are separate checks; none can be inferred from an offline report. Direct GitHub installation remains unaccepted until separately verified.

@@ -1,4 +1,4 @@
-export declare const HOST_VERSION = "0.2.1-rc.2";
+export declare const HOST_VERSION = "0.2.2-rc.1";
 export declare const PROFILE = "chatgpt";
 export declare const ROUTE = "openai-chatgpt";
 export declare const INSTALL_MARKER = "dsh-chatgpt-subscription";

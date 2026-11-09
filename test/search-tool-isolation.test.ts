@@ -10,6 +10,9 @@ import type { Message, ToolSchema } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import * as NativeExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
+import { isolateSubscriptionSearch } from '../src/search-tool-isolation.js'
 import * as plugin from '../src/index.js'
 import { PROVIDER_ID } from '../src/catalog.js'
 
@@ -22,6 +25,7 @@ async function fixture(t: test.TestContext) {
   const llm = await ctx.plugin(LlmRuntime)
   const prompt = await ctx.plugin(SystemPrompt, {})
   const tools = await ctx.plugin(ToolRuntime)
+  const executor = await ctx.plugin(NativeExecutor)
   let searchExecutions = 0
   for (const name of ['web_search', 'web_fetch', 'read', 'bash']) {
     ctx.tools.register({ name, description: name, parameters: { type: 'object' },
@@ -39,7 +43,7 @@ async function fixture(t: test.TestContext) {
   })
   const subscription = await ctx.plugin(plugin)
   t.after(async () => {
-    await subscription.dispose(); await tools.dispose(); await prompt.dispose()
+    await subscription.dispose(); await executor.dispose(); await tools.dispose(); await prompt.dispose()
     await llm.dispose(); await credentials.dispose(); await ctx.fiber.dispose()
     await rm(home, { recursive: true, force: true })
   })
@@ -52,17 +56,20 @@ async function fixture(t: test.TestContext) {
   }
   return { ctx, subscription, select(provider: string) { selected = provider }, agentFor,
     searchExecutions: () => searchExecutions,
-    execute(name: string, committedProvider: string) {
-      return ctx.tools.execute({ callId: ToolCallId(`fixture:${name}`), name, arguments: {},
+    async execute(name: string, committedProvider: string) {
+      const batch = await ctx.tools.execute({ calls: [{ type: 'tool-call', id: ToolCallId(`fixture:${name}`), name, arguments: '{}' }],
         agent: agentFor(committedProvider), signal: new AbortController().signal })
+      return batch.results[0]!.result
     } }
 }
 
-test('subscription assembly removes only DSH search after model selection; switching and unloading restore it', async t => {
+test('presentation removes search guidance while the request boundary owns callable filtering', async t => {
   const f = await fixture(t)
   f.select(PROVIDER_ID)
   const selected = await f.ctx.systemPrompt.assemble()
-  assert.deepEqual(selected.tools.map(tool => tool.name), ['bash', 'read', 'web_fetch'])
+  assert.deepEqual(isolateSubscriptionSearch({ provider: PROVIDER_ID, model: 'fixture-model', messages: [],
+    tools: selected.tools }).tools!.map(tool => tool.name), ['bash', 'read', 'web_fetch'])
+  assert.ok(selected.tools.some(tool => tool.name === 'web_search'), 'host-owned tool declarations remain untouched')
   assert.equal(selected.sections.some(section => section.name === 'tool:web_search'), false)
   assert.equal(selected.sections.some(section => section.name === 'tool:web_fetch'), true)
   assert.ok(f.ctx.tools.get('web_search'), 'keep the registry definition for other routes and historical presenters')
@@ -72,7 +79,7 @@ test('subscription assembly removes only DSH search after model selection; switc
   assert.ok(other.tools.some(tool => tool.name === 'web_search'))
   assert.ok(other.sections.some(section => section.name === 'tool:web_search'))
   f.select(PROVIDER_ID)
-  assert.equal((await f.ctx.systemPrompt.assemble()).tools.some(tool => tool.name === 'web_search'), false)
+  assert.equal((await f.ctx.systemPrompt.assemble()).sections.some(section => section.name === 'tool:web_search'), false)
   await f.subscription.dispose()
   assert.ok((await f.ctx.systemPrompt.assemble()).tools.some(tool => tool.name === 'web_search'))
 })
@@ -97,12 +104,14 @@ test('search execution guard follows committed provider, not the mutable selecti
 
 test('monotonic guard blocks nested search even when pre-execute explicitly allows; never invokes search body', async t => {
   const f = await fixture(t)
+  const pipeline = new ToolExecutionPipeline(f.ctx)
   f.ctx.on('tools/pre-execute', async (_exec, next) => { await next(); return { kind: 'allow' } })
   f.ctx.tools.register({ name: 'nested', description: 'fixture nesting', parameters: { type: 'object' },
     output: { schema: { type: 'boolean' }, render: (_args, value) => [{ type: 'text', text: String(value) }] },
     execute: async (_args, exec) => {
-      const result = await f.ctx.tools.execute({ callId: ToolCallId('nested:search'), name: 'web_search',
+      const prepared = await pipeline.prepare({ callId: ToolCallId('nested:search'), name: 'web_search',
         arguments: {}, agent: exec.agent, parent: exec.token, signal: exec.signal })
+      const result = await pipeline.complete(prepared.exec, prepared.kind === 'dispatch' ? await pipeline.dispatch(prepared.exec) : prepared)
       return result.isError
     } })
   const result = await f.execute('nested', PROVIDER_ID)
@@ -125,7 +134,8 @@ test('current assembly keeps old search calls/results but excludes their late de
   const messages: Message[] = [{ role: 'developer', id: MessageId('late-search'),
     content: [{ type: 'tool-addition', toolName: 'web_search' }], source: { kind: 'tool-registry' } }, call, result]
   const before = JSON.stringify(messages)
-  const projected = projectToolUpdates(messages, assembly.tools, 'addition-only', {
+  const filtered = isolateSubscriptionSearch({ provider: PROVIDER_ID, model: 'fixture-model', messages: [], tools: assembly.tools })
+  const projected = projectToolUpdates(messages, filtered.tools!, 'addition-only', {
     tools: [read], updates: [{ messageId: MessageId('late-search'), additions: [search] }],
   })
   assert.equal(projected.tools?.some(tool => tool.name === 'web_search'), false)

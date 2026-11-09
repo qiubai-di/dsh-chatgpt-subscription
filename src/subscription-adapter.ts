@@ -6,6 +6,7 @@ import { NativeSearchCapture, nativeSearchScope, textMessageId } from './native-
 import { nativeReplay, prepareNativeHistory, toolIdentityReplay } from './native-search-replay.js'
 import { PROVIDER_ID } from './catalog.js'
 import { CapabilityError } from './provider.js'
+import { isolateSubscriptionSearch } from './search-tool-isolation.js'
 
 /**
  * Add native Responses output/citations without replacing Pi's tool, image or
@@ -39,7 +40,7 @@ export class SubscriptionAdapter extends LlmAdapter {
     if (options.provider !== PROVIDER_ID) { yield* stream(options); return }
     const capture = new NativeSearchCapture(options.purpose === 'compaction')
     let request: GenerateOptions
-    try { request = prepareNativeHistory(options, capture.plans, capture.historyTools) }
+    try { request = prepareNativeHistory(isolateSubscriptionSearch(options), capture.plans, capture.historyTools) }
     catch (error) {
       if (!(error instanceof CapabilityError)) throw error
       yield { type: 'finish', reason: options.signal?.aborted ? { kind: 'aborted', failure: {

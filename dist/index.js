@@ -23,6 +23,8 @@ export function subscriptionProfile(manager, models, binding) {
         api: 'openai-responses', baseURL: API_BASE_URL,
         streamIdleTimeoutMs: 300_000,
         maxRequestImageBytes: 20 * 1024 * 1024,
+        maxRequestImages: 50,
+        imageOffloadCountQuantum: 10,
         requestImagePixelBudget: 4_194_304,
         requestImageMaxBytes: 1024 * 1024,
         retryPolicy: resolveRetryPolicy(undefined, 'chatgpt-subscription'),

@@ -28,8 +28,8 @@ async function readOptional(path) {
   catch (error) { if (error.code === 'ENOENT') return undefined; throw error; }
 }
 
-async function command(executable, args, cwd) {
-  const child = spawn(executable, args, { cwd, stdio: ['ignore', 'pipe', 'inherit'] });
+async function command(executable, args, cwd, env = process.env) {
+  const child = spawn(executable, args, { cwd, env, stdio: ['ignore', 'pipe', 'inherit'] });
   let stdout = '';
   child.stdout.on('data', (data) => { stdout += data; });
   await new Promise((resolve, reject) => {
@@ -110,13 +110,16 @@ try {
   if (await readOptional(patchPath) === undefined) {
     await atomicWrite(patchPath, `${JSON.stringify([{ id: 'agent-default-model', config: { provider: ROUTE, model: '__sign_in_required__' } }], null, 2)}\n`);
   }
-  // The archive bundles the locked runtime dependencies; no application startup.
-  await command('npm', ['install', '--ignore-scripts', '--omit=dev', '--no-audit', '--no-fund', '--cache', join(tmpdir(), 'dsh-chatgpt-npm-cache')], profile);
+  // The native manager connects host-provided peers; this is package maintenance,
+  // not application startup. Only independent runtime libraries are bundled.
+  await command(process.execPath, [host.realPath, 'plugin', '--profile', PROFILE, 'add', '--ignore-scripts', installedArchive],
+    profile, { ...process.env, DSH_HOME: home });
   const installedPackage = join(profile, 'node_modules', 'dsh-chatgpt-subscription');
   const targetManifest = JSON.parse(await readFile(join(installedPackage, 'package.json'), 'utf8'));
   if (targetManifest.version !== packageInfo.version) throw new Error('安装的插件版本不匹配。');
   // Only load modules and render help: no Context, DSH session, or account access.
-  await command(process.execPath, ['--input-type=module', '-e', 'await import(process.argv[1])',
+  await command(process.execPath, ['--input-type=module', '-e', 'const { installCliHostResolution } = await import(process.argv[1]); installCliHostResolution(process.argv[2]); await import(process.argv[3])',
+    pathToFileURL(join(installedPackage, 'dist', 'cli-host-resolution.js')).href, host.realPath,
     pathToFileURL(join(installedPackage, 'dist', 'index.js')).href], profile);
   await command(process.execPath, [join(installedPackage, 'dist', 'cli.js'), 'help'], profile);
   const after = {
