@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 
 assert.ok(process.argv[2] && process.argv[3], 'Pass the candidate .tgz and DSH installation paths');
@@ -76,14 +76,18 @@ try {
   const hostBin = hostRequire.resolve('@deepseek-ai/dsh/lib/bin.js');
   await writeFile(join(cliHome, 'installation.json'), JSON.stringify({
     marker: 'dsh-chatgpt-subscription', version: '0.1.8', dshVersion: '0.2.1-rc.2',
-    dshExecutable: hostBin, dshRealPath: hostBin,
+    dshExecutable: join(root, 'removed-host/bin.js'), dshRealPath: join(root, 'removed-host/bin.js'),
   }));
   const noNetwork = join(root, 'no-network.mjs');
   await writeFile(noNetwork, 'globalThis.fetch = async () => { throw new Error("CLI smoke prohibits network"); };\n');
   const cliStatus = execFileSync(process.execPath, ['--import', noNetwork, join(packed, 'dist/cli.js'),
-    'status', '--home', cliHome], { encoding: 'utf8' });
+    'status', '--home', cliHome, '--dsh', hostBin], { encoding: 'utf8' });
   assert.ok(cliStatus.includes('DSH ChatGPT 订阅 ' + manifest.version));
   assert.ok(cliStatus.includes('可用模型：0'));
+  const missingHost = spawnSync(process.execPath, ['--import', noNetwork, join(packed, 'dist/cli.js'),
+    'status', '--home', cliHome], { encoding: 'utf8' });
+  assert.equal(missingHost.status, 1);
+  assert.match(missingHost.stderr, /--dsh/);
   const peerRoots = new Map();
   for (const name of [...Object.keys(manifest.peerDependencies), '@deepseek-ai/cosmokit']) {
     assert.ok(!listing.includes(`package/node_modules/${name}/`), 'host peer was bundled: ' + name);

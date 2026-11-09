@@ -8,7 +8,7 @@ import { acquireOperationLease, assertHost, assertPrivateHome, LocalSetupError, 
 const VERSION = '0.2.0';
 const HELP = `DSH · ChatGPT 订阅
 
-用法：dsh-chatgpt <命令> [--home <专用数据目录>]
+用法：dsh-chatgpt <命令> [--home <专用数据目录>] [--dsh <当前 DSH 命令>]
 
   login     登录 ChatGPT 订阅，并读取账号可用模型
   status    查看本地登录状态；不会访问网络
@@ -34,7 +34,7 @@ function abortOnSignals() {
 }
 export async function main(arguments_ = process.argv.slice(2)) {
     const parsed = parseArgs({ args: arguments_, allowPositionals: true, options: {
-            home: { type: 'string' }, help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'V' },
+            home: { type: 'string' }, dsh: { type: 'string' }, help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'V' },
         } });
     if (parsed.values.version) {
         console.log(VERSION);
@@ -51,7 +51,19 @@ export async function main(arguments_ = process.argv.slice(2)) {
     const home = subscriptionHome(parsed.values.home);
     const installation = await readInstallation(home);
     await assertPrivateHome(home);
-    installCliHostResolution(installation.dshRealPath);
+    let cliHost;
+    try {
+        cliHost = realpathSync(parsed.values.dsh ?? installation.dshRealPath);
+    }
+    catch (error) {
+        if (error.code === 'ENOENT') {
+            throw new LocalSetupError('HOST_NOT_FOUND', '安装记录中的 DSH 已不存在。请用 --dsh 指定当前 DSH 命令，或重新运行本地安装器；已有授权无需删除。');
+        }
+        throw error;
+    }
+    if (parsed.values.dsh)
+        await assertHost(cliHost);
+    installCliHostResolution(cliHost);
     const { openSubscriptionStore } = await import('./dsh-store.js');
     const { manager, dispose } = await openSubscriptionStore(home);
     const cancellation = abortOnSignals();
@@ -105,8 +117,8 @@ export async function main(arguments_ = process.argv.slice(2)) {
         if (status.modelCount === 0)
             throw new LocalSetupError('MODELS_REQUIRED', '请先运行 dsh-chatgpt models 读取账号模型。');
         await selectDefaultModel(home, status.models.map((model) => model.id));
-        const host = await assertHost(installation.dshExecutable);
-        if (host.realPath !== installation.dshRealPath) {
+        const host = await assertHost(parsed.values.dsh ?? installation.dshExecutable);
+        if (!parsed.values.dsh && host.realPath !== installation.dshRealPath) {
             throw new LocalSetupError('HOST_PATH_CHANGED', 'DSH 安装路径已改变，请重新运行本地安装脚本。');
         }
         await dispose();

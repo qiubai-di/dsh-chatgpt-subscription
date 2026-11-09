@@ -18,7 +18,7 @@ Other hosted capabilities, including image generation, Files/File Search, Code I
 
 ## Requirements and compatibility
 
-- **Node.js 24 or newer**.
+- **Node.js 24.9 or newer**.
 - The supported host is **DSH `0.2.2-rc.1`**, with Cordis `4.1.0` and Schemastery `3.19.0`. Shared host packages are peer dependencies and are not bundled. Independent protocol libraries remain pinned. Older DSH releases are not supported by 0.2.0.
 - The installer creates a POSIX shell launcher. Windows installation, command shims and permissions have not been verified.
 
@@ -80,7 +80,7 @@ Alternatively, `dsh-chatgpt run` starts the dedicated `chatgpt` profile instead 
 | `dsh-chatgpt run` | Start DSH with the dedicated profile. |
 | `dsh-chatgpt help` | Show command help. |
 
-The CLI accepts `--home` for a dedicated data directory. The source installer accepts `--home`, `--bin-dir` and `--dsh`; the Web integration script accepts `--home`, `--dsh-home` and `--dsh`. Consult their source before customizing locations. A failed model-directory refresh does not discard a saved grant. If revocation fails, tokens remain available for a retry. Stop the running provider before login, logout, reinstallation or reintegration.
+If the recorded DSH installation has been removed, use `dsh-chatgpt login --dsh /path/to/current/dsh` (or `status`) to select the current supported host without deleting authorization. The CLI accepts `--home` for a dedicated data directory. The source installer accepts `--home`, `--bin-dir` and `--dsh`; the Web integration script accepts `--home`, `--dsh-home` and `--dsh`. Consult their source before customizing locations. A failed model-directory refresh does not discard a saved grant. If revocation fails, tokens remain available for a retry. Stop the running provider before login, logout, reinstallation or reintegration.
 
 ## Login lock timeout
 

@@ -9,7 +9,7 @@
 - Supply the host's image-count defaults and preserve existing image-byte limits.
 - Report operation writer-lock timeouts with a recovery explanation instead of the generic `Error`; uncertain locks are left untouched.
 - Allow login/status to read existing installation records while retaining the actual-host check for startup. Display the executing CLI version.
-- Resolve standalone CLI peers from its recorded DSH host before opening credential storage.
+- Resolve standalone CLI peers from its recorded DSH host before opening credential storage; `--dsh` selects the current host when the recorded installation was removed.
 - Install through the native plugin manager and verify packed public entries against supplied host packages.
 
 ## [0.1.8] - 2026-11-02
